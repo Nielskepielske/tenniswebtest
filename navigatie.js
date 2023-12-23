@@ -6,17 +6,22 @@ const template = document.createElement("template")
 template.innerHTML = /*html*/`
     <style>
     nav {
-    background-color: #d1d1d1;
+    background-color: #E0E0E0;
     padding: 5px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     border-radius: 10px;
-    width: 1200px;
+    /*width: 1160px;
+    height: 75px;*/
+    width: 77.5vw;
+    height: 10vh;
     margin: auto;
-    
+    padding: 0 20px;
+    border: 5px solid black;
     }
+
     nav ul {
         list-style: none;
         margin: 0;
@@ -87,6 +92,35 @@ template.innerHTML = /*html*/`
         justify-content: flex-end;
     }
 
+    ul#account{
+        display: flex;
+        position:relative;
+        flex-direction : column;
+        width: 7%;
+        margin: auto 1rem;
+    }
+    ul#account img{
+        width: 4rem;
+        position: relative;
+    }
+    ul#account.hidden{
+        display: none;
+    }
+    ul#account.hidden img{
+        display: none;
+    }
+
+    ul#account>ul{
+        position: absolute;
+        top: 6.5rem;
+        background-color: lightgrey;
+        padding: 10px;
+        z-index: 1;
+    }
+    ul#account>ul.hidden{
+        display: none;
+    }
+
 
     </style>
     <nav>
@@ -98,49 +132,100 @@ template.innerHTML = /*html*/`
         <div class="right-item">
             <button id="home" class="active">home</button>
             <button id="history">history</button>
-            <button id="myGames">My games</button>
+            <button id="myGames" class="hidden">My games</button>
             <button id="login">Log in</button>
-            
+            <ul id="account" class="hidden">
+            <li id="profilePic"><img src="./images/player1.png"></li>
+            <ul id="profileInfo" class="hidden">
+                <li id="logout">Logout</li>
+            </ul>
+            </ul>
         </div>
     </nav>
 `
 
-class comp extends HTMLElement
-{
-    constructor(){
+class comp extends HTMLElement {
+    constructor() {
         super();
-        this.shadow = this.attachShadow({mode: "open"});
+        this.shadow = this.attachShadow({ mode: "open" });
         this.shadow.append(template.content.cloneNode(true));
-        
+
         this.button = this.shadowRoot.querySelectorAll("button");
     }
 
-    connectedCallback()
-    {
-        this.socket = new WebSocket("ws://localhost:8080");
-        this.socket.addEventListener('open', function (event) {
-            console.log('Connection opened');
-        });
+    connectedCallback() {
         this.button.forEach(btn => {
-            btn.addEventListener('mousedown', (e) =>{
+            btn.addEventListener('mousedown', (e) => {
                 //console.log(this.getAttribute("loggedIn"));
                 // this.socket.send("test");
-                this.button.forEach(btn =>{
+                this.button.forEach(btn => {
                     btn.classList.remove("active");
                 })
                 btn.classList.toggle("active");
                 this.ChangePageEvent(btn.getAttribute("id"));
             });
 
-    });
-}
+            //Hier komt alles voor het profiel
+            this.account = this.shadowRoot.querySelector("#account");
+            this.profileInfo = this.shadowRoot.querySelector("#profileInfo");
+            this.logout = this.shadowRoot.querySelector("#logout");
 
-    ChangePageEvent(id){
+            this.account.removeEventListener("click", this.clickHandler);
+            this.clickHandler = () => {
+                //console.log("test");
+                this.profileInfo.classList.toggle("hidden");
+            };
+            this.account.addEventListener("click", this.clickHandler);
+            this.logout.removeEventListener("click", this.Logout);
+            this.logout.addEventListener("click", this.Logout);
+
+        });
+    }
+    Logout() {
+        this.dispatchEvent(new CustomEvent("signOut", {
+            bubbles: true,
+            composed: true,
+        }))
+    }
+
+    ChangePageEvent(id) {
         this.dispatchEvent(new CustomEvent("ChangePageEvent", {
             bubbles: true,
             composed: true,
             detail: id
         }))
+    }
+
+    Update(user) {
+
+        if (user != null) {
+            this.button.forEach(btn => {
+                btn.classList.remove("hidden");
+            })
+            this.button.forEach(btn => {
+                btn.classList.remove("active");
+            })
+            this.button.forEach(btn => {
+                if (btn.getAttribute("id") == "login") {
+                    btn.classList.add("hidden");
+                }
+            })
+            this.account.classList.remove("hidden");
+        }
+        else {
+            this.button.forEach(btn => {
+                btn.classList.remove("hidden");
+            })
+            this.button.forEach(btn => {
+                btn.classList.remove("active");
+            })
+            this.button.forEach(btn => {
+                if (btn.getAttribute("id") == "myGames") {
+                    btn.classList.add("hidden");
+                }
+            })
+            this.account.classList.add("hidden");
+        }
     }
 
 }

@@ -1,6 +1,7 @@
 //#region IMPORTS
-import "../gameSetup/createGame.js" 
+import "../gameSetup/createGame.js"
 import "../playedMatches/matchScore.js"
+import "../playedMatches/matchScore.js";
 import "../gameSetup/endGameView.js"
 //#endregion IMPORTS
 
@@ -9,35 +10,44 @@ template.innerHTML = /*html*/`
     <!--<scorenbord-comp type="admin" gameId="2023120301"></scorenbord-comp>-->
     <style>
         #myGamesContainer{
-            /*border: 2px solid black;*/
+            position: relative;
             border-radius: 10px;
             width: 1200px;
             margin: auto;
             margin-top: 20px;
-            min-height: 300px;
+            min-height: 750px;
+            border: 5px solid black;
+            background-color: #E0E0E0;
+        }
+        #startView {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
             position: relative;
         }
-        #welcomeDiv{
+        #welcomeDiv {
             margin: auto;
             width: max-content;
-            border-bottom: 2px solid black;
-            margin-bottom: 25px;
+            margin-bottom: 0;
+            padding: 0;
+            font-size: 60px;
         }
-        #myHistoryDiv{
-            min-height: 200px;
-            max-height: 500px;
-            width: 95%;
-            margin: auto;
-            border: 2px solid black;
-            border-radius: 10px
+        #welcomeDiv p{
+            margin: 10px 0;
         }
-        #myHistoryDiv legend{
-            font-size: 2em;
-            margin: auto;
+        #welcomeDiv span{
+            color: green;
         }
-
+        #myHistoryDiv {
+            min-height: 75px;
+            max-height: 550px;
+        }
         #createGameDiv{
-            margin: 25px 0px 25px 0px; 
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            bottom: -15px;
+            left: 0;
         }
 
         /*begin createGameButton*/
@@ -48,16 +58,19 @@ template.innerHTML = /*html*/`
             transition: all .2s;
             padding: 10px 20px;
             border-radius: 100px;
-            background: #cfef00;
+            background: rgb(1, 184, 90);
             border: 1px solid transparent;
             display: flex;
             align-items: center;
             font-size: 15px;
             margin: auto;
+            transition: all .2s;
         }
 
         button:hover {
-            background: #c4e201;
+            color: #ddd;
+            background: #006400;
+            transition: all .2s;
         }
 
         button > svg {
@@ -76,15 +89,43 @@ template.innerHTML = /*html*/`
             top: 20%;
             left: 50%;
         }
+        #pagination {
+            list-style: none;
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            justify-content: flex-end;
+            padding-right: 60px;
+        }
+        #pagination li {
+            font-size: 18px;
+            font-weight: bold;
+            padding: 5px 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 2;
+            background-color: white;
+        }
+        #pagination li.active {
+            box-shadow: inset 0 0 2px green;
+            color: green;
+        }
+        endview-comp {
+            position: absolute;
+            top: 10%;
+            left: 33%;
+        }
+
     </style>
     <div id="myGamesContainer">
         <div id="startView">
             <div id="welcomeDiv">
-                <h1>Welcome <span id="playerName">player</span></h1>
+                <p>Welcome <span id="playerName">player</span></p>
             </div>
-            <fieldset id="myHistoryDiv">
-        	    <legend>History<legend>
-            </fieldset>
+            <div id="myHistoryDiv">
+        	    <!--<legend>History<legend>-->
+            </div>
             <div id="createGameDiv">
                 <button id="createGameBtn">
                     <span>Create game</span>
@@ -94,239 +135,192 @@ template.innerHTML = /*html*/`
                     </svg>
                 </button>
             </div>
+            <ul id="pagination"></ul>
         </div>
         <div id="gameView">
-
         </div>
     </div>
 `
 
-class comp extends HTMLElement
-{
-    constructor(){
+class MyGamesComp extends HTMLElement {
+    constructor() {
         super();
-        this.shadow = this.attachShadow({mode: "open"});
+        this.shadow = this.attachShadow({ mode: "open" });
         this.shadow.append(template.content.cloneNode(true));
-        
+
         this.creatGame = this.shadowRoot.querySelector("#createGameBtn");
         this.mainContainer = this.shadowRoot.querySelector("#startView");
         this.gameContainer = this.shadowRoot.querySelector("#gameView");
+        this.myHistory = this.shadowRoot.querySelector("#myHistoryDiv");
+        this.pagination = this.shadowRoot.querySelector('#pagination');
 
         this.formIsShown = false;
+    }
+
+    connectedCallback() {
+        this.currentPage = 1;
+        this.itemsPerPage = 4;
+
+        this.allGames = [];
+        this.currentId = "";
+        this.EndGameView = null;
+
+        this.creatGame.addEventListener("click", () => { this.showCreateGameForm(); });
+    }
+
+    showCreateGameForm() {
+        let gameForm = document.createElement("create-comp");
+        gameForm.setAttribute("id", "gameForm");
+        this.mainContainer.append(gameForm);
+    }
+
+    createGame(e, gameId) {
+        if (e.length == 1) {
+            this.shadowRoot.querySelector("#gameForm").remove();
+            this.formIsShown = false;
         }
-        connectedCallback(){
-            this.allGames = [];
-            this.currentId = "";
-            this.EndGameView = null;
-            this.myHistory = this.shadowRoot.querySelector("#myHistoryDiv");
+        else {
+            //hier maken we het veld voor een game aan
+            this.gameContainer.style.display = "block";
+            let scoreBoard = document.createElement("scorenbord-comp");
+            scoreBoard.setAttribute("type", "admin");
+            scoreBoard.setAttribute("gameId", `${gameId}`); //hier moet een game id worden aangemaakt
 
-            //create a websocket
-            this.socket = new WebSocket("ws://localhost:8080");
-            this.socket.addEventListener('open', function (event) {
-                console.log('Connection opened');
-            });
+            this.shadowRoot.querySelector("#gameForm").remove();
+            this.formIsShown = false;
 
-            this.gameId;
-            this.players = [];
-            this.creatGame.addEventListener("click", ()=>{
-                if(!this.formIsShown){
-                    this.showCreateGameForm(); 
-                    this.formIsShown = true
-                }
+            this.mainContainer.style.display = "none";
 
-            });
-            this.addEventListener("EndGameEvent", this.EndGameEvent);  
-            this.addEventListener("createGameEvent", this.createGameEvent);
-        }  
+            this.gameContainer.appendChild(scoreBoard);
 
-        showCreateGameForm(){
-            let gameForm = document.createElement("create-comp");
-            gameForm.setAttribute("id", "gameForm");
-            this.mainContainer.append(gameForm);
-        }
+            //we steken de volgende functies hierin omdat we de gameId nodig hebben en deze niet direct ingeladen wordt
+            //namen in het component zetten
+            let bord = this.shadowRoot.querySelector("scorenbord-comp");
 
-        createGameEvent(e){
-            if(e.detail.length == 1){
-                this.shadowRoot.querySelector("#gameForm").remove();
-                this.formIsShown = false;
+            this.players = e;
+            if (e.length == 3) {
+                bord.scoreObject.team1.players = [this.players[0]];
+                bord.team1.innerHTML = `<h4>${this.players[0].gebruikersnaam}</h4>`;
+                bord.scoreObject.team2.players = [this.players[2]];
+                bord.team2.innerHTML = `<h4>${this.players[2].gebruikersnaam}</h4>`;
             }
-            else{
-
-                
-                //console.log(e.detail);
-
-                //game aanmaken in de database
-                fetch('./test_php/addGame.php', {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                })
-                .then(response => response.json())
-                .then(data => {
-                        this.gameId = +data;
-                        //console.log(this.gameId);
-
-                        //hier maken we het veld voor een game aan
-                        this.gameContainer.style.display = "block";
-                        let scoreBoard = document.createElement("scorenbord-comp");
-                        scoreBoard.setAttribute("type", "admin");
-                        scoreBoard.setAttribute("gameId", `${this.gameId}`); //hier moet een game id worden aangemaakt
-        
-                        this.shadowRoot.querySelector("#gameForm").remove();
-                        this.formIsShown = false;
-        
-                        this.mainContainer.style.display = "none";
-        
-                        
-                        this.gameContainer.appendChild(scoreBoard);
-
-                        //we steken de volgende functies hierin omdat we de gameId nodig hebben en deze niet direct ingeladen wordt
-                        //namen in het component zetten
-                        let bord = this.shadowRoot.querySelector("scorenbord-comp");
-        
-                        this.players = e.detail;
-                        if(e.detail.length == 3){
-                            bord.scoreObject.team1.players = [this.players[0]];
-                            bord.team1.innerHTML = `<h4>${this.players[0].gebruikersnaam}</h4>`;
-                            bord.scoreObject.team2.players = [this.players[2]];
-                            bord.team2.innerHTML = `<h4>${this.players[2].gebruikersnaam}</h4>`;
-        
-                            //spelers toevoegen aan de game
-
-                            fetch('./test_php/addPlayerToTeam.php?gameId='+this.gameId+'&teamId=1&spelerId='+this.players[0].id, {
-                                method: 'GET',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                            })
-                            fetch('./test_php/addPlayerToTeam.php?gameId='+this.gameId+'&teamId=2&spelerId='+this.players[2].id, {
-                                method: 'GET',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                            })
-                            .then(response => response.json())
-                            .then(data => {
-                                this.socket.send("refresh");
-                            });
-                        }
-                        else{
-                            bord.scoreObject.team1.players = [this.players[0], this.players[1]];
-                            bord.team1.innerHTML = `<h4>${this.players[0].gebruikersnaam}</h4><h4>${this.players[1].gebruikersnaam}</h4>`;
-                            bord.scoreObject.team2.players = [this.players[2], this.players[3]];
-                            bord.team2.innerHTML = `<h4>${this.players[2].gebruikersnaam}</h4><h4>${this.players[3].gebruikersnaam}</h4>`;
-        
-                            let teamId;
-                            for(let i = 0; i< this.players.length; i++){
-                                if(i<2){
-                                    teamId = 1;
-                                }
-                                else{
-                                    teamId = 2;
-                                }
-                                fetch('./test_php/addPlayerToTeam.php?gameId='+this.gameId+'&teamId='+teamId+'&spelerId='+this.players[i].id, {
-                                    method: 'GET',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                    },
-                                })
-                                .then(response => response.json())
-                                .then(data => {
-                                    //console.log(data);
-                                    this.socket.send("refresh");
-                                })
-                            }
-        
-                        }
-                    },
-
-                );           
+            else {
+                bord.scoreObject.team1.players = [this.players[0], this.players[1]];
+                bord.team1.innerHTML = `<h4>${this.players[0].gebruikersnaam}</h4><h4>${this.players[1].gebruikersnaam}</h4>`;
+                bord.scoreObject.team2.players = [this.players[2], this.players[3]];
+                bord.team2.innerHTML = `<h4>${this.players[2].gebruikersnaam}</h4><h4>${this.players[3].gebruikersnaam}</h4>`;
             }
+            this.pagination.style.display = "none";
         }
-        EndGameEvent(){
-            // this.gameContainer.style.display = "none";
-            // this.mainContainer.style.display = "block";
-            // this.shadowRoot.querySelector("scorenbord-comp").remove();
-            this.endGameView = document.createElement('endview-comp');
-            fetch('./test_php/endGame.php?gameId='+this.gameId, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            })
-            .then(response => response.json())
-            .then(data => {
-                //console.log(data);
-                this.socket.send("refresh");
-                fetch('./test_php/getHistory.php', {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                })
-                .then(response => response.json())
-                .then(data => {
-                    this.allGames = data;
-                    this.currentId = this.gameId;
-                    this.gameInfo = this.allGames.find(game => game.gameId == this.currentId);
-                    if (this.gameInfo) {
-                        this.endGameView.setMatchInfo({
-                            gameId: this.gameInfo.gameId,
-                            date: this.gameInfo.date,
-                            startTime: this.gameInfo.starttijd,
-                            endTime: this.gameInfo.eindtijd,
-                            player1: this.gameInfo["team1 names"],
-                            player2: this.gameInfo["team2 names"],
-                            score1: this.gameInfo["team1 sets"],
-                            score2: this.gameInfo["team2 sets"],
-                            scoringData: this.gameInfo["points"],
-                        })
-                    }
-                    this.gameContainer.appendChild(this.endGameView);
-            
-                    this.endGameView.addEventListener("backToMyGamesPage", () => {
-                        if (this.gameInfo) {
-                            this.matchComponent = document.createElement('match-comp');
-            
-                            this.matchComponent.setAttribute('id', this.gameInfo.gameId);
-                            this.matchComponent.setAttribute('date', this.gameInfo.date);
-                            this.matchComponent.setAttribute('startTime', this.gameInfo.startTime);
-                            this.matchComponent.setAttribute('endTime', this.gameInfo.endTime);
-                            this.matchComponent.setAttribute('playerName1', this.gameInfo.player1);
-                            this.matchComponent.setAttribute('playerName2', this.gameInfo.player2);
-                            this.matchComponent.setAttribute('score1', this.gameInfo.player1Score);
-                            this.matchComponent.setAttribute('score2', this.gameInfo.player2Score);
-                            this.myHistory.appendChild(this.matchComponent);
-            
-                            this.matchComponent.addEventListener('toggleContent', (event) => {
-                                this.toggleMatchComp(event.detail);
-                            });
-                        }
-            
-                        this.gameContainer.style.display = "none";
-                        this.mainContainer.style.display = "block";
-                        this.shadowRoot.querySelector("scorenbord-comp").remove();
-                        this.endGameView.remove();
-                    });
+    }
+    Update(games) {
+        //console.log("update");
+        this.allGames = games;
+        let totalPages = Math.ceil(this.allGames.length / this.itemsPerPage);
 
+        this.RenderPage(games);
+        this.RenderPagination(totalPages);
+    }
+    RenderPage() {
+        let displayGames = this.allGames.slice((this.currentPage - 1) * this.itemsPerPage, this.currentPage * this.itemsPerPage);
+        this.myHistory.innerHTML = "";
+        for (let game of displayGames) {
+            let matchComponent = document.createElement('match-comp');
+            matchComponent.setAttribute('id', game.gameId);
 
-                });
-    
-            })
-            
+            matchComponent.setMatchData({
+                gameId: game.gameId,
+                date: game.date,
+                startTime: game.starttijd,
+                endTime: game.eindtijd,
+                player1: game["team1 names"],
+                player2: game["team2 names"],
+                score1: game["team1 sets"],
+                score2: game["team2 sets"],
+                scoringData: game["points"],
+            });
+            this.myHistory.append(matchComponent);
+
+            matchComponent.addEventListener('toggleContent', (event) => {
+                this.toggleMatchComp(event.detail);
+            });
         }
-        toggleMatchComp(gameId) {
+    }
+
+    RenderPagination(totalPages) {
+        this.pagination.innerHTML = "";
+
+        for (let i = 1; i <= totalPages; i++) {
+            this.pageItem = document.createElement('li');
+            this.pageItem.textContent = i;
+            this.pageItem.page = i;
+            this.pagination.append(this.pageItem);
+
+            if (i == this.currentPage) {
+                this.pageItem.classList.add('active');
+            };
+
+        }
+        let pageEl = this.shadowRoot.querySelectorAll('#pagination li');
+        for (let e of pageEl) {
+            e.addEventListener('click', () => {
+                pageEl.forEach((el) => { el.classList.remove('active'); });
+                this.currentPage = e.page;
+                e.classList.add('active');
+                this.RenderPage();
+            });
+        }
+    }
+
+    EndGame(data, gameId) {
+        this.endGameView = document.createElement('endview-comp');
+        this.allGames = data;
+        this.currentId = gameId;
+
+        this.gameInfo = this.allGames.find(game => game.gameId == this.currentId);
+        if (this.gameInfo) {
+            this.endGameView.setMatchInfo({
+                gameId: this.gameInfo.gameId,
+                date: this.gameInfo.date,
+                startTime: this.gameInfo.starttijd,
+                endTime: this.gameInfo.eindtijd,
+                player1: this.gameInfo["team1 names"],
+                player2: this.gameInfo["team2 names"],
+                score1: this.gameInfo["team1 sets"],
+                score2: this.gameInfo["team2 sets"],
+                scoringData: this.gameInfo["points"],
+            })
+        }
+        this.gameContainer.appendChild(this.endGameView);
+
+        this.endGameView.addEventListener("backToMyGamesPage", () => {
+            if (this.gameInfo) {
+                this.gameContainer.style.display = "none";
+                this.mainContainer.style.display = "block";
+                this.shadowRoot.querySelector("scorenbord-comp").remove();
+                this.endGameView.remove();
+                this.pagination.style.display = "flex";
+            }
+        });
+    }
+
+    toggleMatchComp(gameId) {
+        if (gameId != null) {
             this.matchComponents = this.shadowRoot.querySelectorAll('match-comp');
             this.matchComponents.forEach((component) => {
                 let componentId = component.getAttribute('id');
-                if (componentId === gameId) {
+                console.log('componentId: ', componentId);
+                if (componentId == gameId) {
                     component.toggle(true);
                 } else {
                     component.toggle(false);
                 }
             });
         }
+        else {
+            console.error("gameId is null!");
+        }
+    }
 }
 
-customElements.define('mygames-comp', comp)
+customElements.define('mygames-comp', MyGamesComp)

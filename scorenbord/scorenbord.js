@@ -34,7 +34,7 @@ template.innerHTML = /*html*/`
             padding: 4px;
             border: 5px solid black;
             border-radius: 5px;
-            width: 70%;
+            width: 100%;
             margin: auto;
             margin-top: 5px;
             margin-bottom: 5px;
@@ -48,7 +48,9 @@ template.innerHTML = /*html*/`
             
         }
         .scoreBoard{
-            width: 1200px;
+            /*width: 1200px;*/
+            min-width: 70%;
+            max-width: 80%;
             margin: auto;
 
         }
@@ -175,6 +177,7 @@ class comp extends HTMLElement
         //#endregion elements
         
         //#region global value's
+        this.hasWinner = false;
         this.pointsArray = ["0","15","30","40","ADV"];
         this.serving = "";
 
@@ -200,12 +203,6 @@ class comp extends HTMLElement
     }
 
     connectedCallback(){
-        //create a websocket
-        this.socket = new WebSocket("ws://localhost:8080");
-        this.socket.addEventListener('open', function (event) {
-            console.log('Connection opened');
-        });
-
         this.setNr = 1;
         this.type = this.getAttribute("type");
 
@@ -218,6 +215,21 @@ class comp extends HTMLElement
         
         this.addEventListener("UpdateScoreEvent", this.UpdateScoreEvent);  
 
+    }
+
+    UpdateGame(info){ //wordt getriggerd wanneer de scoren geupdate wordt
+        this.dispatchEvent(new CustomEvent("updateGame", {
+            bubbles: true,
+            composed: true,
+            detail: info
+        }))
+    }
+    AddGameSet(info){
+        this.dispatchEvent(new CustomEvent("addGameSet", {
+            bubbles: true,
+            composed: true,
+            detail: info
+        }))
     }
 
 //#region PuntenTelling
@@ -233,16 +245,7 @@ class comp extends HTMLElement
         this.game(action, player);
         /*einde spel*/
 
-        fetch("./test_php/updateGame.php?gameId="+this.scoreObject.game+"&puntenT1="+this.scoreObject.team1.points+"&puntenT2="+this.scoreObject.team2.points+"&gamesT1="+this.scoreObject.team1.game+"&gamesT2="+this.scoreObject.team2.game+"&setsT1="+this.scoreObject.team1.sets+"&setsT2="+this.scoreObject.team2.sets+"&serving="+this.scoreObject.serving,{
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json; charset=utf-8",
-            },
-        })
-        .then(response => response.json())
-        .then(data => {
-            this.socket.send("refresh");
-        });
+        this.UpdateGame(this.scoreObject);
     }
 
     game(action, team){
@@ -362,25 +365,14 @@ class comp extends HTMLElement
     }
     sets(team){
         /*reset de match punten*/
-        let gamesT1 = +this.scoreObject.team1.game;
-        let gamesT2 = +this.scoreObject.team2.game;
+        let info = [this.setNr, this.scoreObject.game, this.scoreObject.team1.game, this.scoreObject.team2.game];
+        this.setNr++;  //setNr moet altijd verhoogd worden ook bij fout in fecht
+        this.AddGameSet(info);
 
-        fetch("./test_php/addSet.php?gameId="+this.scoreObject.game+"&setNr="+this.setNr+"&gamesT1="+gamesT1+"&gamesT2="+gamesT2,
-        {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json; charset=utf-8",
-            },
-        })
-        .then(response => response.json())
-        .then(data => {
-            this.setNr += 1;
-        });
         this.gameT1.innerHTML = "0";
         this.scoreObject.team1.game = 0;
         this.gameT2.innerHTML = "0";
         this.scoreObject.team2.game = 0;
-
 
         let T1 = +this.setsT1.innerHTML;
         let T2 = +this.setsT2.innerHTML;
@@ -397,8 +389,8 @@ class comp extends HTMLElement
                 this.scoreObject.team2.sets = T2;
                 break;
         }
-        console.log(T1 + "|" + T2)
-        if((T1 == 2 || T2 == 2) && (T1 < 2 || T2 < 2)){
+        if((T1 == 2 || T2 == 2) && (!this.hasWinner)){
+            this.hasWinner = true;
             this.winner(team);
         }
         
@@ -407,11 +399,11 @@ class comp extends HTMLElement
         this.scoreObject.gameStatus = 0;
         //end game knop toevoegen
         let endgamebtn = document.createElement(`endgamebtn-comp`);
+        endgamebtn.setAttribute("gameid", this.getAttribute("gameid"))
         this.endgame.append(endgamebtn);
         //score knoppen weg halen
         // this.shadowRoot.querySelector("#T_1").remove();
         // this.shadowRoot.querySelector("#T_2").remove();
-        this.socket.send("refresh");
     }
 //#endregion PuntenTelling
 

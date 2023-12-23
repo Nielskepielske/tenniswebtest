@@ -5,26 +5,48 @@ import "../playedMatches/matchScore.js";
 const template = document.createElement("template");
 template.innerHTML = /*html*/ `
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Anton&display=swap');
 
         #historyContainer {
-            border: 2px solid black;
+            border: 5px solid black;
             border-radius: 10px;
-            width: 1200px;
+            /*width: 1200px;
+            min-height: 750px;*/
+            width: 80vw;
+            height: 80vh;
             margin: auto;
             margin-top: 20px;
             padding-top: 10px;
+            background-color: #E0E0E0;
         }
         #title {
-            font-size: 60px;
+            font-family: 'Anton', sans-serif;
+            font-weight: 600;
+            text-decoration: underline;
+            font-size: 3rem;
+            padding-bottom: 10px;
             margin: 0 auto;
             text-align: center;
         }
         #pageContainer {
-            display: flex;
+            display: block;
             flex-direction: column;
             justify-content: space-evenly;
-            margin-top: 20px;
+            /*margin-top: 20px;*/
+            max-height: 600px;
+            overflow-y: scroll;
         }
+        #pageContainer::-webkit-scrollbar {
+            width: 8px;
+        }
+        #pageContainer::-webkit-scrollbar-thumb {
+            background-color: #888;
+            border-radius: 5px;
+        }
+        #pageContainer::-webkit-scrollbar-track {
+            background-color: #ddd;
+            border-radius: 5px;
+        } 
         #page {
             display: none;
         }
@@ -37,18 +59,19 @@ template.innerHTML = /*html*/ `
             gap: 10px;
             margin-top: 10px;
             justify-content: flex-end;
-            padding-right: 55px;
+            padding-right: 80px;
         }
         #pagination li {
             font-size: 18px;
             font-weight: bold;
             padding: 5px 10px;
-            border: 1px solid #ccc;
+            border: 1px solid green;
             border-radius: 5px;
             cursor: pointer;
+            background-color: white;
         }
         #pagination li.active {
-            box-shadow: inset 0 0 2px green;
+            box-shadow: inset 0 0 5px green;
             color: green;
         }
 
@@ -69,7 +92,7 @@ class HistoryComp extends HTMLElement {
         this.shadow = this.attachShadow({ mode: "open" });
         this.shadow.append(template.content.cloneNode(true));
 
-
+        this.matchData = [];
 
         this.currentPage = 1;
         this.itemsPerPage = 8;
@@ -79,36 +102,21 @@ class HistoryComp extends HTMLElement {
     }
 
     connectedCallback() {
-        this.matchData = [];
-        this.socket = new WebSocket("ws://localhost:8080");
-        this.socket.addEventListener("message", (e) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-                console.log(reader.result);
-                let message = reader.result;
-                if (message == "refresh") {
-                    console.log("refreshing");
-                    this.fetchGames();
-                }
-            }
-            reader.readAsText(e.data);
-
-        });
-        this.fetchGames();
+        // this.renderPage();
+        this.GetAllGames();
     }
-    fetchGames() {
-        fetch('./test_php/getHistory.php', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        })
-            .then(response => response.json())
-            .then(data => {
-                //console.log(data);
-                this.matchData = data;
-                this.renderPage();
-            })
+
+    GetAllGames() {
+        this.dispatchEvent(new CustomEvent("getHistory", {
+            bubbles: true,
+            composed: true,
+        }))
+    }
+
+    Update(gameData) {
+        this.matchData = gameData;
+        //console.log('history: ', gameData);
+        this.renderPage();
     }
 
     renderPage() {
@@ -121,24 +129,19 @@ class HistoryComp extends HTMLElement {
     showPage() {
         this.startIndex = (this.currentPage - 1) * this.itemsPerPage;
         this.endIndex = this.startIndex + this.itemsPerPage;
+
+        this.matchData.sort((a, b) => b.gameId - a.gameId);
         this.pageItems = this.matchData.slice(this.startIndex, this.endIndex);
 
         this.pageContainer.innerHTML = "";
 
-        for (let item of this.pageItems) {
-            this.matchComponent = document.createElement('match-comp');
+        for (let i = 0; i < this.pageItems.length; i++) {
+            const item = this.pageItems[i];
+            console.log('history: ', item);
+            let matchComponent = document.createElement('match-comp');
+            matchComponent.setAttribute('id', item.gameId);
 
-            this.matchComponent.setAttribute('id', item.gameId); // moet er wel zijn om de "pijltjes" te kunnen togglen..
-            // this.matchComponent.setAttribute('date', item.date);
-            // this.matchComponent.setAttribute('startTime', item.startTime);
-            // this.matchComponent.setAttribute('endTime', item.endTime);
-            // this.matchComponent.setAttribute('playerName1', item.player1);
-            // this.matchComponent.setAttribute('playerName2', item.player2);
-            // this.matchComponent.setAttribute('score1', item.player1Score);
-            // this.matchComponent.setAttribute('score2', item.player2Score);
-
-
-            this.matchComponent.setMatchData({
+            matchComponent.setMatchData({
                 gameId: item.gameId,
                 date: item.date,
                 startTime: item.starttijd,
@@ -149,10 +152,9 @@ class HistoryComp extends HTMLElement {
                 score2: item["team2 sets"],
                 scoringData: item["points"],
             });
+            this.pageContainer.append(matchComponent);
 
-            this.pageContainer.append(this.matchComponent);
-
-            this.matchComponent.addEventListener('toggleContent', (event) => {
+            matchComponent.addEventListener('toggleContent', (event) => {
                 this.toggleMatchComp(event.detail);
             });
         }
@@ -173,19 +175,38 @@ class HistoryComp extends HTMLElement {
     renderPagination(totalPages) {
         this.pagination.innerHTML = "";
 
-        for (let i = 1; i <= totalPages; i++) {
-            this.pageItem = document.createElement('li');
-            this.pageItem.textContent = i;
-            this.pagination.append(this.pageItem);
+        // calculates the range of visible page buttons (in this case 3 at a time)
+        this.startPage = Math.max(1, this.currentPage - 1);
+        this.endPage = Math.min(totalPages, this.startPage + 2);
 
-            if (i == this.currentPage) {
-                this.pageItem.classList.add('active');
-            };
-
-            this.pageItem.addEventListener('click', () => {
-                this.changePage(i);
-            });
+        // Previous Button
+        if (this.currentPage > 1) {
+            this.createPaginationButton("Previous", this.currentPage - 1);
         }
+
+        // Page Numbers
+        for (let i = this.startPage; i <= this.endPage; i++) {
+            this.createPaginationButton(i, i);
+        }
+
+        // Next Button
+        if (this.currentPage < totalPages) {
+            this.createPaginationButton("Next", this.currentPage + 1);
+        }
+    }
+
+    createPaginationButton(label, pageNumber) {
+        this.pageItem = document.createElement('li');
+        this.pageItem.textContent = label;
+        this.pagination.append(this.pageItem);
+
+        if (label === this.currentPage || (label === "Previous" && this.currentPage === pageNumber - 1) || (label === "Next" && this.currentPage === pageNumber + 1)) {
+            this.pageItem.classList.add('active');
+        }
+
+        this.pageItem.addEventListener('click', () => {
+            this.changePage(pageNumber);
+        });
     }
 
     changePage(pageNumber) {
